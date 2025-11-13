@@ -1,0 +1,17 @@
+# Copyright (c) 2024, Ruuvi Innovations Ltd
+# SPDX-License-Identifier: BSD-3-Clause
+
+source "Kconfig" # Include Zephyr's main Kconfig
+rsource "../drivers/Kconfig"
+
+config RUUVI_AIR_BUTTON_DELAY_BEFORE_REBOOT
+	int "Delay in ms before reboot after pressing the pinhole button"
+	default 5000
+	help
+	  Delay in ms before reboot after pressing the pinhole button.
+
+config RUUVI_AIR_FW_LOADER_UPLOADING_TIMEOUT_SEC
+	int "Timeout in seconds for mcumgr upload activity"
+	default 180
+	help
+	  Timeout in seconds for mcumgr upload activity.

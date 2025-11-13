@@ -6,12 +6,13 @@
  */
 
 #include <zephyr/kernel.h>
+#include <zephyr/device.h>
+#include <zephyr/sys/reboot.h>
 #include <zephyr/stats/stats.h>
 #include <zephyr/usb/usb_device.h>
 #include <zephyr/logging/log.h>
 
 #ifdef CONFIG_MCUMGR_GRP_FS
-#include <zephyr/device.h>
 #include <zephyr/fs/fs.h>
 #include <zephyr/fs/littlefs.h>
 #endif
@@ -23,12 +24,14 @@
 #include "fwloader_button.h"
 #include "fwloader_led.h"
 #include "fwloader_bluetooth.h"
+#include "fwloader_watchdog.h"
+#include "fwloader_mcumgr_mgmt_callbacks.h"
 #include "app_version.h"
 #include "ncs_version.h"
 #include "version.h"
-#if APP_VERSION_NUMBER != 0
-#include "app_commit.h"
-#endif
+// #if APP_VERSION_NUMBER != 0
+// #include "app_commit.h"
+// #endif
 #include "ncs_commit.h"
 #include "zephyr_commit.h"
 
@@ -119,10 +122,15 @@ main(void)
 #endif
 #if APP_VERSION_NUMBER != 0
     LOG_INF(
-        "### Ruuvi FwLoader: Version: %s, build: %s, commit: %s",
+        "### Ruuvi FwLoader: Version: %s, build: %s, APP_VERSION_NUMBER: %s",
         APP_VERSION_EXTENDED_STRING,
         STRINGIFY(APP_BUILD_VERSION),
-        APP_COMMIT_STRING);
+        STRINGIFY(APP_VERSION_NUMBER));
+    // LOG_INF(
+    //     "### Ruuvi FwLoader: Version: %s, build: %s, commit: %s",
+    //     APP_VERSION_EXTENDED_STRING,
+    //     STRINGIFY(APP_BUILD_VERSION),
+    //     APP_COMMIT_STRING);
 #else
     LOG_INF("### Ruuvi FwLoader: Version: %s, build: %s", APP_VERSION_EXTENDED_STRING, STRINGIFY(APP_BUILD_VERSION));
 #endif
@@ -143,6 +151,11 @@ main(void)
     btldr_fs_mount();
 #endif
 
+    if (!fwloader_watchdog_start())
+    {
+        LOG_ERR("Failed to initialize watchdog");
+    }
+
     int rc = STATS_INIT_AND_REG(smp_svr_stats, STATS_SIZE_32, "smp_svr_stats");
     if (rc < 0)
     {
@@ -154,32 +167,74 @@ main(void)
     LOG_INF("fw_loader: start_smp_bluetooth_adverts");
     start_smp_bluetooth_adverts();
 #endif
+    fwloader_mcumgr_mgmt_callbacks_init(btldr_fs_storage_mnt.mnt_point);
+
+    fwloader_led_lock();
+    if (!fwloader_button_is_pressed())
+    {
+        fwloader_led_red_on();
+    }
+    fwloader_led_unlock();
 
     /* The system work queue handles all incoming mcumgr requests.  Let the
      * main thread idle while the mcumgr server runs.
      */
+    uint32_t uploading_timeout_cnt = 0;
     while (1)
     {
-        fwloader_led_lock();
         if (!fwloader_button_is_pressed())
         {
-            fwloader_led_green_on();
-            fwloader_led_red_on();
+            fwloader_watchdog_feed();
         }
-        fwloader_led_unlock();
 
-        k_sleep(K_MSEC(500));
-
-        fwloader_led_lock();
-        if (!fwloader_button_is_pressed())
+        if (fwloader_bt_is_connected())
         {
-            fwloader_led_green_off();
-            fwloader_led_red_off();
+            if (fwloader_mcumgr_mgmt_callbacks_is_uploading_in_progress())
+            {
+                uploading_timeout_cnt = 0;
+            }
+            else
+            {
+                uploading_timeout_cnt++;
+            }
+            LOG_INF("Uploading is in progress, timeout cnt: %d", uploading_timeout_cnt);
         }
-        fwloader_led_unlock();
+        else
+        {
+            uploading_timeout_cnt++;
+            LOG_INF("Uploading is not in progress, timeout cnt: %d", uploading_timeout_cnt);
+        }
+        if (uploading_timeout_cnt >= CONFIG_RUUVI_AIR_FW_LOADER_UPLOADING_TIMEOUT_SEC)
+        {
+            LOG_WRN("No upload activity for %d seconds, rebooting", CONFIG_RUUVI_AIR_FW_LOADER_UPLOADING_TIMEOUT_SEC);
+            fwloader_watchdog_force_trigger();
+        }
 
-        k_sleep(K_MSEC(500));
+        k_sleep(K_MSEC(1000));
         STATS_INC(smp_svr_stats, ticks);
     }
     return 0;
+}
+
+/**
+ * Declare the symbol pointing to the former implementation of sys_reboot function
+ */
+extern void
+__real_sys_reboot(int type);
+
+/**
+ * Redefine sys_reboot function to print a message before actually restarting
+ */
+void
+__wrap_sys_reboot(int type) // NOSONAR
+{
+    LOG_WRN("Rebooting...");
+    k_msleep(25); // Give some time to print log message
+
+    /* Call the former implementation to actually restart the board */
+#if CONFIG_DEBUG
+    __real_sys_reboot(type);
+#else
+    fwloader_watchdog_force_trigger();
+#endif
 }

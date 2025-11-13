@@ -15,8 +15,6 @@
 
 LOG_MODULE_DECLARE(fw_loader, LOG_LEVEL_INF);
 
-#define RUUVI_AIR_BUTTON_DELAY_BEFORE_REBOOT (3000)
-
 #define RUUVI_AIR_BUTTON_DELAY_FLUSH_LOGS_MS (100)
 
 static struct gpio_callback g_button_isr_gpio_cb_data;
@@ -38,7 +36,7 @@ static K_WORK_DELAYABLE_DEFINE(g_button_work_delayable_reboot, &button_workq_cb_
 static void
 button_workq_cb_pressed(struct k_work* item)
 {
-    k_work_reschedule(&g_button_work_delayable_timeout, K_MSEC(RUUVI_AIR_BUTTON_DELAY_BEFORE_REBOOT));
+    k_work_reschedule(&g_button_work_delayable_timeout, K_MSEC(CONFIG_RUUVI_AIR_BUTTON_DELAY_BEFORE_REBOOT));
     fwloader_led_lock();
     fwloader_button_set_pressed();
     fwloader_led_green_on();
@@ -62,7 +60,7 @@ button_workq_cb_released(struct k_work* item)
 static void
 button_workq_cb_timeout(struct k_work* item)
 {
-    LOG_WRN("Button %d ms timeout - rebooting...", RUUVI_AIR_BUTTON_DELAY_BEFORE_REBOOT);
+    LOG_WRN("Button %d ms timeout - rebooting...", CONFIG_RUUVI_AIR_BUTTON_DELAY_BEFORE_REBOOT);
     fwloader_led_lock();
     fwloader_led_green_off();
     fwloader_led_red_off();
@@ -73,7 +71,11 @@ button_workq_cb_timeout(struct k_work* item)
 static void
 button_workq_cb_reboot(struct k_work* item)
 {
+#if CONFIG_DEBUG
     sys_reboot(SYS_REBOOT_COLD);
+#else
+    fwloader_watchdog_force_trigger();
+#endif
 }
 
 static void

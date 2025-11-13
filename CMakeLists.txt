@@ -74,20 +74,7 @@ include("${MOD_DIR}/git_describe_tag.cmake")
 SET(TAG_PREFIX "fwloader_v")
 SET(TAG_WORK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
 
-set(GENERATED_VERSION_BIN "${CMAKE_CURRENT_BINARY_DIR}/VERSION")
 set(GENERATED_VERSION "${CMAKE_CURRENT_SOURCE_DIR}/VERSION")
-# Generate VERSION on every build (ALWAYS re-run keeps it current w/ HEAD and dirty state)
-add_custom_target(gen_version_always ALL
-  COMMAND ${CMAKE_COMMAND} -DOUT=${GENERATED_VERSION_BIN}
-                           -DWORKDIR=${TAG_WORK_DIR}
-                           -DTAG_PREFIX=${TAG_PREFIX}
-                           -P ${MOD_DIR}/gen_version.cmake
-  # Sync to source tree only if content changed
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-          "${GENERATED_VERSION_BIN}" "${GENERATED_VERSION}"
-  COMMENT "Generating VERSION (always) and syncing if changed"
-  VERBATIM
-)
 
 set(VH ${PROJECT_BINARY_DIR}/zephyr/include/generated/zephyr/app_version.h)
 set(MYVH ${PROJECT_BINARY_DIR}/zephyr/include/generated/zephyr/app_version.override.h)
@@ -104,7 +91,7 @@ add_custom_command(
     -DAPP_BUILD_VERSION=${FWLOADER_BUILD_VERSION}
     -DCMAKE_MODULE_PATH=${MOD_DIR}
     -P ${ZEPHYR_BASE}/cmake/gen_version_h.cmake
-  DEPENDS gen_version_always ${GENERATED_VERSION} ${git_dependency}
+  DEPENDS ${GENERATED_VERSION} ${git_dependency}
   COMMAND_EXPAND_LISTS
 )
 
@@ -120,9 +107,9 @@ add_custom_target(override_version_h ALL
   DEPENDS ${MYVH}.stamp)
 
 # Make sure all generated headers wait for our override too
-add_dependencies(zephyr_generated_headers gen_version_always override_version_h)
+add_dependencies(zephyr_generated_headers override_version_h)
 # Make the Zephyr 'app' target depend on the VERSION file and generted header
-add_dependencies(app gen_version_always override_version_h)
+add_dependencies(app override_version_h)
 
 
 target_sources(app PRIVATE
@@ -141,14 +128,22 @@ target_sources(app PRIVATE
         src/fwloader_led.h
         src/fwloader_led_err.c
         src/fwloader_led_err.h
+        src/fwloader_mcumgr_mgmt_callbacks.c
+        src/fwloader_mcumgr_mgmt_callbacks.h
         src/fwloader_segger_rtt.c
         src/fwloader_segger_rtt.h
         src/fwloader_supercap.c
         src/fwloader_supercap.h
+        src/fwloader_watchdog.c
+        src/fwloader_watchdog.h
         src/main.c
 )
 
 target_include_directories(app PRIVATE
     ${ZEPHYR_BASE}/kernel/include
     ${ARCH_DIR}/${ARCH}/include
+)
+
+target_link_options(app INTERFACE
+        "-Wl,--wrap=sys_reboot"
 )

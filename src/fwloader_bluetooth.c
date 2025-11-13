@@ -10,6 +10,8 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/mgmt/mcumgr/transport/smp_bt.h>
+#include "fwloader_led.h"
+#include "fwloader_button.h"
 
 #define LOG_LEVEL LOG_LEVEL_DBG
 #include <zephyr/logging/log.h>
@@ -19,6 +21,7 @@ static struct k_work advertise_work;
 
 static char     g_bt_name[sizeof(CONFIG_BT_DEVICE_NAME) + 5];
 static uint64_t g_ble_mac;
+static bool     g_bt_is_connected;
 
 static const struct bt_data ad[] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
@@ -94,6 +97,14 @@ connected(struct bt_conn* conn, uint8_t err)
     else
     {
         LOG_INF("Connected");
+        g_bt_is_connected = true;
+        fwloader_led_lock();
+        if (!fwloader_button_is_pressed())
+        {
+            fwloader_led_red_off();
+            fwloader_led_green_on();
+        }
+        fwloader_led_unlock();
     }
 }
 
@@ -101,6 +112,14 @@ static void
 disconnected(struct bt_conn* conn, uint8_t reason)
 {
     LOG_INF("Disconnected (reason 0x%02x)", reason);
+    g_bt_is_connected = false;
+    fwloader_led_lock();
+    if (!fwloader_button_is_pressed())
+    {
+        fwloader_led_green_off();
+        fwloader_led_red_on();
+    }
+    fwloader_led_unlock();
     k_work_submit(&advertise_work);
 }
 
@@ -138,4 +157,10 @@ start_smp_bluetooth_adverts(void)
     {
         LOG_ERR("Bluetooth enable failed: %d", rc);
     }
+}
+
+bool
+fwloader_bt_is_connected(void)
+{
+    return g_bt_is_connected;
 }
