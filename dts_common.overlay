@@ -5,8 +5,8 @@
 #include <zephyr/dt-bindings/led/led.h>
 
 /* Path to lp5810.h must be relative to
-   "ruuvi.air.c/dts" or
-   "ruuvi.air.c/boards/nordic/nrf52840dk_ruuviair/dts".
+   "ruuvi.air/dts" or
+   "ruuvi.air/boards/nordic/nrf52840dk_ruuviair/dts".
 */
 #include <../../../../drivers/lp5810/include/lp5810.h>
 
