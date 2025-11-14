@@ -15,3 +15,34 @@ config RUUVI_AIR_FW_LOADER_UPLOADING_TIMEOUT_SEC
 	default 180
 	help
 	  Timeout in seconds for mcumgr upload activity.
+
+choice RUUVI_AIR_PINHOLE_LED
+    prompt "Configure pinhole Red/Green LEDs mode"
+    default RUUVI_AIR_PINHOLE_LED_PWM
+    help
+      Select pinhole LED mode for Ruuvi Air.
+
+config RUUVI_AIR_PINHOLE_LED_GPIO
+	bool "Use GPIO to control pinhole Red/Green LEDs"
+
+config RUUVI_AIR_PINHOLE_LED_PWM
+	bool "Use PWM to control pinhole Red/Green LEDs"
+
+config RUUVI_AIR_PINHOLE_LED_NONE
+	bool "Don't use pinhole Red/Green LEDs"
+
+endchoice  # RUUVI_AIR_PINHOLE_LED
+
+config RUUVI_AIR_PINHOLE_LED_PWM_PERIOD_NS
+	int "Pinhole LED PWM period (ns)"
+	default 20000
+	depends on RUUVI_AIR_PINHOLE_LED_PWM
+	help
+	  PWM period for the bottom LED in nanoseconds.
+
+config RUUVI_AIR_PINHOLE_LED_PWM_PULSE_WIDTH_NS
+	int "Pinhole LED PWM pulse width (ns)"
+	default 1000
+	depends on RUUVI_AIR_PINHOLE_LED_PWM
+	help
+	  PWM pulse width for the bottom LED in nanoseconds.

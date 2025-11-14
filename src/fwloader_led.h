@@ -12,7 +12,10 @@ extern "C" {
 #endif
 
 void
-fwloader_led_init(void);
+fwloader_led_early_init(void);
+
+void
+fwloader_led_late_init_pwm(void);
 
 void
 fwloader_led_deinit(void);

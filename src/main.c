@@ -28,6 +28,8 @@
 #include "fwloader_mcumgr_mgmt_callbacks.h"
 #include "fwloader_settings.h"
 #include "fwloader_fw_ver.h"
+#include "fwloader_rgb_led.h"
+#include "ruuvi_fw_update.h"
 
 LOG_MODULE_REGISTER(fw_loader, LOG_LEVEL_INF);
 
@@ -38,6 +40,9 @@ LOG_MODULE_REGISTER(fw_loader, LOG_LEVEL_INF);
 #define HIST_LOG_PARTITION_SIZE  PM_HIST_STORAGE_SIZE
 
 #define HIST_LOG_FLASH_AREA_ID FLASH_AREA_ID(HIST_LOG_PARTITION_LABEL)
+
+static bool    g_flag_reboot_requested = false;
+static k_tid_t g_main_thread_id;
 
 /* Define an example stats group; approximates seconds since boot. */
 STATS_SECT_START(smp_svr_stats)
@@ -58,7 +63,7 @@ static struct fs_mount_t btldr_fs_storage_mnt = {
     .type        = FS_LITTLEFS,
     .fs_data     = &storage,
     .storage_dev = (void*)FIXED_PARTITION_ID(littlefs_storage1),
-    .mnt_point   = "/lfs1",
+    .mnt_point   = RUUVI_FW_UPDATE_MOUNT_POINT,
 };
 
 static struct fs_mount_t* const g_mountpoint = &btldr_fs_storage_mnt;
@@ -105,12 +110,43 @@ btldr_fs_mount(void)
 }
 #endif
 
+static bool
+app_fs_is_file_exist(const char* const p_abs_path)
+{
+    bool                    res = true;
+    static struct fs_dirent g_fs_dir_entry;
+    const int               rc = fs_stat(p_abs_path, &g_fs_dir_entry);
+    if (-ENOENT == rc)
+    {
+        res = false;
+    }
+    else if (0 != rc)
+    {
+        res = false;
+    }
+    else if (FS_DIR_ENTRY_FILE != g_fs_dir_entry.type)
+    {
+        res = false;
+    }
+    return res;
+}
+
+/**
+ * Declare the symbol pointing to the former implementation of sys_reboot function
+ */
+extern void
+__real_sys_reboot(int type);
+
 int
 main(void)
 {
+    g_main_thread_id = k_current_get();
+
     fwloader_fw_ver_init();
 
     fwloader_segger_rtt_check_data_location_and_size();
+
+    fwloader_led_late_init_pwm();
 
     if (!fwloader_settings_init())
     {
@@ -150,7 +186,7 @@ main(void)
      * main thread idle while the mcumgr server runs.
      */
     uint32_t uploading_timeout_cnt = 0;
-    while (1)
+    while (!g_flag_reboot_requested)
     {
         if (!fwloader_button_is_pressed())
         {
@@ -177,20 +213,38 @@ main(void)
         if (uploading_timeout_cnt >= CONFIG_RUUVI_AIR_FW_LOADER_UPLOADING_TIMEOUT_SEC)
         {
             LOG_WRN("No upload activity for %d seconds, rebooting", CONFIG_RUUVI_AIR_FW_LOADER_UPLOADING_TIMEOUT_SEC);
-            fwloader_watchdog_force_trigger();
+            sys_reboot(SYS_REBOOT_COLD);
         }
 
-        k_sleep(K_MSEC(1000));
+        if (fwloader_rgb_led_is_lp5810_ready())
+        {
+            const fwloader_rgb_led_currents_t rgb_led_currents = {
+                .current_red   = 0,
+                .current_green = 0,
+                .current_blue  = 128,
+            };
+            fwloader_rgb_led_check_and_reinit_if_needed();
+            fwloader_rgb_led_set_raw_currents_and_pwms(
+                &rgb_led_currents,
+                &(fwloader_rgb_led_pwms_t) { .pwm_red = 0, .pwm_green = 0, .pwm_blue = 255 });
+            k_sleep(K_MSEC(50));
+
+            fwloader_rgb_led_set_raw_currents_and_pwms(
+                &rgb_led_currents,
+                &(fwloader_rgb_led_pwms_t) { .pwm_red = 0, .pwm_green = 0, .pwm_blue = 0 });
+            k_sleep(K_MSEC(950));
+        }
+        else
+        {
+            k_sleep(K_MSEC(1000));
+        }
+
         STATS_INC(smp_svr_stats, ticks);
     }
+    sys_reboot(SYS_REBOOT_COLD);
+
     return 0;
 }
-
-/**
- * Declare the symbol pointing to the former implementation of sys_reboot function
- */
-extern void
-__real_sys_reboot(int type);
 
 /**
  * Redefine sys_reboot function to print a message before actually restarting
@@ -198,13 +252,61 @@ __real_sys_reboot(int type);
 void
 __wrap_sys_reboot(int type) // NOSONAR
 {
-    LOG_WRN("Rebooting...");
-    k_msleep(25); // Give some time to print log message
-
-    /* Call the former implementation to actually restart the board */
-#if CONFIG_DEBUG
-    __real_sys_reboot(type);
+    if (k_current_get() == g_main_thread_id)
+    {
+        LOG_WRN("Reboot requested from main thread");
+        LOG_WRN("Turning off LED before reboot");
+        if (fwloader_rgb_led_is_lp5810_ready())
+        {
+            fwloader_rgb_led_set_raw_currents_and_pwms(
+                &(fwloader_rgb_led_currents_t) { 0, 0, 0 },
+                &(fwloader_rgb_led_pwms_t) { 0, 0, 0 });
+        }
+        bool flag_updates_available = false;
+        if (app_fs_is_file_exist(RUUVI_FW_UPDATE_MOUNT_POINT "/" RUUVI_FW_MCUBOOT0_FILE_NAME))
+        {
+            flag_updates_available = true;
+        }
+        if (app_fs_is_file_exist(RUUVI_FW_UPDATE_MOUNT_POINT "/" RUUVI_FW_MCUBOOT1_FILE_NAME))
+        {
+            flag_updates_available = true;
+        }
+        if (app_fs_is_file_exist(RUUVI_FW_UPDATE_MOUNT_POINT "/" RUUVI_FW_LOADER_FILE_NAME))
+        {
+            flag_updates_available = true;
+        }
+        if (app_fs_is_file_exist(RUUVI_FW_UPDATE_MOUNT_POINT "/" RUUVI_FW_APP_FILE_NAME))
+        {
+            flag_updates_available = true;
+        }
+        if (flag_updates_available)
+        {
+            LOG_WRN("There are pending firmware updates, indicating this with RGB LED");
+            if (fwloader_rgb_led_is_lp5810_ready())
+            {
+                fwloader_rgb_led_turn_on_animation_blinking_white(&(fwloader_rgb_led_currents_t) {
+                    .current_red   = 115,
+                    .current_green = 36,
+                    .current_blue  = 53,
+                });
+            }
+        }
+        LOG_WRN("Rebooting...");
+        k_msleep(25); // Give some time to print log message
+                      /* Call the former implementation to actually restart the board */
+#if CONFIG_DEBUG || !IS_ENABLED(CONFIG_WATCHDOG)
+        __real_sys_reboot(SYS_REBOOT_COLD);
 #else
-    fwloader_watchdog_force_trigger();
+        fwloader_watchdog_force_trigger();
 #endif
+    }
+    else
+    {
+        LOG_WRN("Reboot requested from thread id %p", (void*)k_current_get());
+        g_flag_reboot_requested = true;
+        while (1)
+        {
+            k_msleep(1000);
+        }
+    }
 }

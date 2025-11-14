@@ -136,7 +136,7 @@ fwloader_fw_ver_init(void)
     }
 
 #if defined(CONFIG_BOOTLOADER_MCUBOOT)
-    fw_img_print_image_info(PM_ID(mcuboot_secondary), &g_fw_img_fw_ver, &g_fw_img_hw_rev);
+    fw_img_print_image_info(FW_IMG_ID_FWLOADER, &g_fw_img_fw_ver, &g_fw_img_hw_rev);
     if (g_fw_img_hw_rev.hw_rev_num != g_cfg_hw_rev)
     {
         LOG_ERR(

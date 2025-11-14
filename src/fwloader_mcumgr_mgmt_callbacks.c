@@ -8,14 +8,9 @@
 #include <zephyr/mgmt/mcumgr/mgmt/callbacks.h>
 #include <zephyr/mgmt/mcumgr/grp/fs_mgmt/fs_mgmt.h>
 #include <zephyr/logging/log.h>
+#include "ruuvi_fw_update.h"
 
 LOG_MODULE_REGISTER(mcumgr_mgmt, LOG_LEVEL_INF);
-
-#define RUUVI_FW_PATH_MAX_SIZE      (64)
-#define RUUVI_FW_MCUBOOT0_FILE_NAME "signed_by_mcuboot_and_b0_mcuboot.bin"
-#define RUUVI_FW_MCUBOOT1_FILE_NAME "signed_by_mcuboot_and_b0_s1_image.bin"
-#define RUUVI_FW_LOADER_FILE_NAME   "ruuvi_air_fw_loader.signed.bin"
-#define RUUVI_FW_APP_FILE_NAME      "ruuvi_air_fw.signed.bin"
 
 static const char* g_p_mnt_point;
 static uint32_t    g_upload_cnt;

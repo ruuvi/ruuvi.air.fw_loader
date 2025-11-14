@@ -3,6 +3,8 @@
 
 cmake_minimum_required(VERSION 3.20.0)
 
+list(APPEND ZEPHYR_EXTRA_MODULES ${CMAKE_CURRENT_SOURCE_DIR}/../drivers)
+
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(ruuvi.fw_loader)
 
@@ -132,6 +134,8 @@ target_sources(app PRIVATE
         src/fwloader_led_err.h
         src/fwloader_mcumgr_mgmt_callbacks.c
         src/fwloader_mcumgr_mgmt_callbacks.h
+        src/fwloader_rgb_led.c
+        src/fwloader_rgb_led.h
         src/fwloader_segger_rtt.c
         src/fwloader_segger_rtt.h
         src/fwloader_settings.c
@@ -142,11 +146,13 @@ target_sources(app PRIVATE
         src/fwloader_watchdog.h
         src/fw_img_hw_rev.c
         src/fw_img_hw_rev.h
+        src/shell_cmd_ruuvi.c
         src/main.c
 )
 
 target_include_directories(app PRIVATE
     ../include
+    ../drivers/lp5810/include
     ${ZEPHYR_BASE}/kernel/include
     ${ARCH_DIR}/${ARCH}/include
 )

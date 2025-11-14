@@ -1,5 +1,3 @@
-/ {
-	chosen {
-			nordic,pm-ext-flash = &w25q128jv;
-	};
-};
+/**
+ * @copyright Ruuvi Innovations Ltd, license BSD-3-Clause.
+ */

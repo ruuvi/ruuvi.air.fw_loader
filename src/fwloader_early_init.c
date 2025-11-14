@@ -24,9 +24,14 @@ fwloader_early_init_post_kernel(void)
 #if defined(CONFIG_BOARD_RUUVI_RUUVIAIR_REV_1)
     fwloader_supercap_init();
 #endif // CONFIG_BOARD_RUUVI_RUUVIAIR_REV_1
-    fwloader_led_init();
+    fwloader_led_early_init();
+    fwloader_ext_flash_power_off();
+    fwloader_led_red_set(true);
+    k_msleep(100);
     fwloader_button_cb_init();
     fwloader_ext_flash_power_on();
+    fwloader_led_red_set(false);
+    k_msleep(100);
     return 0;
 }
 

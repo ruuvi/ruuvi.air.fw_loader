@@ -1,0 +1,12 @@
+/**
+ * @copyright Ruuvi Innovations Ltd, license BSD-3-Clause.
+ */
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <I2C_BITRATE_STANDARD>;
+
+	rtc_pcf85263a: pcf85263a@51 {
+		status = "disabled";
+	};
+};
