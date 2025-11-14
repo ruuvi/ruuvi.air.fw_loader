@@ -10,7 +10,7 @@
 #include <zephyr/sys/reboot.h>
 #include <zephyr/stats/stats.h>
 #include <zephyr/usb/usb_device.h>
-#include <zephyr/logging/log.h>
+#include <zephyr/sys/__assert.h>
 
 #ifdef CONFIG_MCUMGR_GRP_FS
 #include <zephyr/fs/fs.h>
@@ -26,14 +26,8 @@
 #include "fwloader_bluetooth.h"
 #include "fwloader_watchdog.h"
 #include "fwloader_mcumgr_mgmt_callbacks.h"
-#include "app_version.h"
-#include "ncs_version.h"
-#include "version.h"
-// #if APP_VERSION_NUMBER != 0
-// #include "app_commit.h"
-// #endif
-#include "ncs_commit.h"
-#include "zephyr_commit.h"
+#include "fwloader_settings.h"
+#include "fwloader_fw_ver.h"
 
 LOG_MODULE_REGISTER(fw_loader, LOG_LEVEL_INF);
 
@@ -114,38 +108,14 @@ btldr_fs_mount(void)
 int
 main(void)
 {
-#if defined(CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION)
-    LOG_INF(
-        "### Ruuvi FwLoader: Image version: %s (FwInfoCnt: %u)",
-        CONFIG_MCUBOOT_IMGTOOL_SIGN_VERSION,
-        CONFIG_FW_INFO_FIRMWARE_VERSION);
-#endif
-#if APP_VERSION_NUMBER != 0
-    LOG_INF(
-        "### Ruuvi FwLoader: Version: %s, build: %s, APP_VERSION_NUMBER: %s",
-        APP_VERSION_EXTENDED_STRING,
-        STRINGIFY(APP_BUILD_VERSION),
-        STRINGIFY(APP_VERSION_NUMBER));
-    // LOG_INF(
-    //     "### Ruuvi FwLoader: Version: %s, build: %s, commit: %s",
-    //     APP_VERSION_EXTENDED_STRING,
-    //     STRINGIFY(APP_BUILD_VERSION),
-    //     APP_COMMIT_STRING);
-#else
-    LOG_INF("### Ruuvi FwLoader: Version: %s, build: %s", APP_VERSION_EXTENDED_STRING, STRINGIFY(APP_BUILD_VERSION));
-#endif
-    LOG_INF(
-        "### Ruuvi FwLoader: NCS version: %s, build: %s, commit: %s",
-        NCS_VERSION_STRING,
-        STRINGIFY(NCS_BUILD_VERSION),
-        NCS_COMMIT_STRING);
-    LOG_INF(
-        "### Ruuvi FwLoader: Kernel version: %s, build: %s, commit: %s",
-        KERNEL_VERSION_EXTENDED_STRING,
-        STRINGIFY(BUILD_VERSION),
-        ZEPHYR_COMMIT_STRING);
+    fwloader_fw_ver_init();
 
     fwloader_segger_rtt_check_data_location_and_size();
+
+    if (!fwloader_settings_init())
+    {
+        LOG_ERR("fwloader_settings_init failed");
+    }
 
 #ifdef CONFIG_MCUMGR_GRP_FS
     btldr_fs_mount();

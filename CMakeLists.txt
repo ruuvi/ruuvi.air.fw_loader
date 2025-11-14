@@ -119,6 +119,8 @@ target_sources(app PRIVATE
         src/fwloader_err_handler.c
         src/fwloader_ext_flash_power.c
         src/fwloader_ext_flash_power.h
+        src/fwloader_fw_ver.c
+        src/fwloader_fw_ver.h
         src/fwloader_button.c
         src/fwloader_button.h
         src/fwloader_button_cb.c
@@ -132,14 +134,19 @@ target_sources(app PRIVATE
         src/fwloader_mcumgr_mgmt_callbacks.h
         src/fwloader_segger_rtt.c
         src/fwloader_segger_rtt.h
+        src/fwloader_settings.c
+        src/fwloader_settings.h
         src/fwloader_supercap.c
         src/fwloader_supercap.h
         src/fwloader_watchdog.c
         src/fwloader_watchdog.h
+        src/fw_img_hw_rev.c
+        src/fw_img_hw_rev.h
         src/main.c
 )
 
 target_include_directories(app PRIVATE
+    ../include
     ${ZEPHYR_BASE}/kernel/include
     ${ARCH_DIR}/${ARCH}/include
 )

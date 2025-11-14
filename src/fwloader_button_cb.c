@@ -12,6 +12,7 @@
 #include <zephyr/logging/log.h>
 #include "fwloader_button.h"
 #include "fwloader_led.h"
+#include "fwloader_watchdog.h"
 
 LOG_MODULE_DECLARE(fw_loader, LOG_LEVEL_INF);
 
