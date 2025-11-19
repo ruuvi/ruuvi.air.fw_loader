@@ -7,6 +7,7 @@
 #include <zephyr/drivers/led.h>
 #include <zephyr/logging/log.h>
 #include <lp5810_api.h>
+#include "zephyr_api.h"
 
 LOG_MODULE_DECLARE(fw_loader, LOG_LEVEL_INF);
 
@@ -15,6 +16,8 @@ LOG_MODULE_DECLARE(fw_loader, LOG_LEVEL_INF);
 
 #define LED_RGB_CHANNEL_CURRENT_START 0
 #define LED_RGB_CHANNEL_PWM_START     3
+
+#define AUTO_ANIMATION_NUM_LED_CHANNELS 3
 
 #if DT_HAS_COMPAT_STATUS_OKAY(ti_lp5810)
 const struct device* const dev_lp5810 = DEVICE_DT_GET_ONE(ti_lp5810);
@@ -41,7 +44,7 @@ fwloader_rgb_led_set_raw_currents_and_pwms(
         p_rgb_led_pwms->pwm_red,         p_rgb_led_pwms->pwm_green,         p_rgb_led_pwms->pwm_blue,
     };
     LOG_HEXDUMP_DBG(buf, sizeof(buf), "RGB LED update: ");
-    int res = led_write_channels(dev_lp5810, LED_RGB_CHANNEL_CURRENT_START, sizeof(buf), buf);
+    zephyr_api_ret_t res = led_write_channels(dev_lp5810, LED_RGB_CHANNEL_CURRENT_START, sizeof(buf), buf);
     if (0 != res)
     {
         LOG_ERR("LP5810: led_write_channels failed, res=%d", res);
@@ -63,7 +66,7 @@ fwloader_rgb_led_update_pwms(const fwloader_rgb_led_pwms_t* const p_rgb_led_pwms
         p_rgb_led_pwms->pwm_blue,
     };
     LOG_HEXDUMP_DBG(buf, sizeof(buf), "RGB LED update: ");
-    int res = led_write_channels(dev_lp5810, LED_RGB_CHANNEL_PWM_START, sizeof(buf), buf);
+    zephyr_api_ret_t res = led_write_channels(dev_lp5810, LED_RGB_CHANNEL_PWM_START, sizeof(buf), buf);
     if (0 != res)
     {
         LOG_ERR("LP5810: led_write_channels failed, res=%d", res);
@@ -94,7 +97,9 @@ bool
 fwloader_rgb_led_turn_on_animation_blinking_white(const fwloader_rgb_led_currents_t* const p_currents)
 {
 #if DT_HAS_COMPAT_STATUS_OKAY(ti_lp5810)
-    const uint8_t buf[3] = { p_currents->current_red, p_currents->current_green, p_currents->current_blue };
+    const uint8_t buf[AUTO_ANIMATION_NUM_LED_CHANNELS] = { p_currents->current_red,
+                                                           p_currents->current_green,
+                                                           p_currents->current_blue };
     if (!lp5810_auto_animation_enable(dev_lp5810, &buf[0], sizeof(buf)))
     {
         LOG_ERR("LP5810: Failed to set AUTO DC");
@@ -104,20 +109,20 @@ fwloader_rgb_led_turn_on_animation_blinking_white(const fwloader_rgb_led_current
     const lp5810_auto_animation_cfg_t anim_cfg = {
         .auto_pause    = 0,
         .auto_playback = 0x0F,
-        .AEU1_PWM      = { 0, 255, 0, 0, 0 },
-        .AEU1_T12      = 0x44,
-        .AEU1_T34      = 0x00,
-        .AEU1_playback = 0x03,
-        .AEU2_PWM      = { 0, 0, 0, 0, 0 },
-        .AEU2_T12      = 0,
-        .AEU2_T34      = 0,
-        .AEU2_playback = 0,
-        .AEU3_PWM      = { 0, 0, 0, 0, 0 },
-        .AEU3_T12      = 0,
-        .AEU3_T34      = 0,
-        .AEU3_playback = 0,
+        .aeu1_pwm      = { 0, 255, 0, 0, 0 },
+        .aeu1_t12      = 0x44,
+        .aeu1_t34      = 0x00,
+        .aeu1_playback = 0x03,
+        .aeu2_pwm      = { 0, 0, 0, 0, 0 },
+        .aeu2_t12      = 0,
+        .aeu2_t34      = 0,
+        .aeu2_playback = 0,
+        .aeu3_pwm      = { 0, 0, 0, 0, 0 },
+        .aeu3_t12      = 0,
+        .aeu3_t34      = 0,
+        .aeu3_playback = 0,
     };
-    for (int i = 0; i < 3; i++)
+    for (int32_t i = 0; i < AUTO_ANIMATION_NUM_LED_CHANNELS; ++i)
     {
         if (!lp5810_auto_animation_configure(dev_lp5810, i, &anim_cfg))
         {

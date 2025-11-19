@@ -30,8 +30,13 @@
 #include "fwloader_fw_ver.h"
 #include "fwloader_rgb_led.h"
 #include "ruuvi_fw_update.h"
+#include "zephyr_api.h"
 
 LOG_MODULE_REGISTER(fw_loader, LOG_LEVEL_INF);
+
+#if !defined(CONFIG_DEBUG)
+#define CONFIG_DEBUG 0
+#endif
 
 #define STORAGE_PARTITION_LABEL storage_partition
 #define STORAGE_PARTITION_ID    FIXED_PARTITION_ID(STORAGE_PARTITION_LABEL)
@@ -40,6 +45,21 @@ LOG_MODULE_REGISTER(fw_loader, LOG_LEVEL_INF);
 #define HIST_LOG_PARTITION_SIZE  PM_HIST_STORAGE_SIZE
 
 #define HIST_LOG_FLASH_AREA_ID FLASH_AREA_ID(HIST_LOG_PARTITION_LABEL)
+
+#define FWLOADER_RGB_LED_CURRENT_RED   (FWLOADER_RGB_LED_CURRENT_MIN)
+#define FWLOADER_RGB_LED_CURRENT_GREEN (FWLOADER_RGB_LED_CURRENT_MIN)
+#define FWLOADER_RGB_LED_CURRENT_BLUE  (128U)
+
+#define FWLOADER_RGB_LED_PWM_RED   (FWLOADER_RGB_LED_PWM_MIN)
+#define FWLOADER_RGB_LED_PWM_GREEN (FWLOADER_RGB_LED_PWM_MIN)
+#define FWLOADER_RGB_LED_PWM_BLUE  (FWLOADER_RGB_LED_PWM_MAX)
+
+#define FWLOADER_RGB_LED_BLINK_INTERVAL_MS (1000)
+#define FWLOADER_RGB_LED_BLINK_DURATION_MS (50)
+
+#define FWLOADER_RGB_ANIMATION_BLINKING_WHITE_CURRENT_RED   (115U)
+#define FWLOADER_RGB_ANIMATION_BLINKING_WHITE_CURRENT_GREEN (36U)
+#define FWLOADER_RGB_ANIMATION_BLINKING_WHITE_CURRENT_BLUE  (53U)
 
 static bool    g_flag_reboot_requested = false;
 static k_tid_t g_main_thread_id;
@@ -73,7 +93,7 @@ static struct fs_mount_t* const g_mountpoint = &btldr_fs_storage_mnt;
 static bool
 btldr_fs_mount(void)
 {
-    int rc = fs_mkfs(FS_LITTLEFS, FIXED_PARTITION_ID(littlefs_storage1), NULL, 0);
+    zephyr_api_ret_t rc = fs_mkfs(FS_LITTLEFS, FIXED_PARTITION_ID(littlefs_storage1), NULL, 0);
     if (0 != rc)
     {
         LOG_ERR("FAIL: mkfs fa_id %d: res=%d", FIXED_PARTITION_ID(littlefs_storage1), rc);
@@ -113,29 +133,28 @@ btldr_fs_mount(void)
 static bool
 app_fs_is_file_exist(const char* const p_abs_path)
 {
-    bool                    res = true;
     static struct fs_dirent g_fs_dir_entry;
-    const int               rc = fs_stat(p_abs_path, &g_fs_dir_entry);
+    const int32_t           rc = fs_stat(p_abs_path, &g_fs_dir_entry);
     if (-ENOENT == rc)
     {
-        res = false;
+        return false;
     }
-    else if (0 != rc)
+    if (0 != rc)
     {
-        res = false;
+        return false;
     }
-    else if (FS_DIR_ENTRY_FILE != g_fs_dir_entry.type)
+    if (FS_DIR_ENTRY_FILE != g_fs_dir_entry.type)
     {
-        res = false;
+        return false;
     }
-    return res;
+    return true;
 }
 
 /**
  * Declare the symbol pointing to the former implementation of sys_reboot function
  */
 extern void
-__real_sys_reboot(int type);
+__real_sys_reboot(int type); // NOSONAR
 
 int
 main(void)
@@ -162,7 +181,7 @@ main(void)
         LOG_ERR("Failed to initialize watchdog");
     }
 
-    int rc = STATS_INIT_AND_REG(smp_svr_stats, STATS_SIZE_32, "smp_svr_stats");
+    zephyr_api_ret_t rc = STATS_INIT_AND_REG(smp_svr_stats, STATS_SIZE_32, "smp_svr_stats");
     if (rc < 0)
     {
         LOG_ERR("Error initializing stats system [%d]", rc);
@@ -201,13 +220,13 @@ main(void)
             }
             else
             {
-                uploading_timeout_cnt++;
+                uploading_timeout_cnt += 1;
             }
             LOG_INF("Uploading is in progress, timeout cnt: %d", uploading_timeout_cnt);
         }
         else
         {
-            uploading_timeout_cnt++;
+            uploading_timeout_cnt += 1;
             LOG_INF("Uploading is not in progress, timeout cnt: %d", uploading_timeout_cnt);
         }
         if (uploading_timeout_cnt >= CONFIG_RUUVI_AIR_FW_LOADER_UPLOADING_TIMEOUT_SEC)
@@ -219,31 +238,37 @@ main(void)
         if (fwloader_rgb_led_is_lp5810_ready())
         {
             const fwloader_rgb_led_currents_t rgb_led_currents = {
-                .current_red   = 0,
-                .current_green = 0,
-                .current_blue  = 128,
+                .current_red   = FWLOADER_RGB_LED_CURRENT_RED,
+                .current_green = FWLOADER_RGB_LED_CURRENT_GREEN,
+                .current_blue  = FWLOADER_RGB_LED_CURRENT_BLUE,
             };
             fwloader_rgb_led_check_and_reinit_if_needed();
             fwloader_rgb_led_set_raw_currents_and_pwms(
                 &rgb_led_currents,
-                &(fwloader_rgb_led_pwms_t) { .pwm_red = 0, .pwm_green = 0, .pwm_blue = 255 });
-            k_sleep(K_MSEC(50));
+                &(fwloader_rgb_led_pwms_t) {
+                    .pwm_red   = FWLOADER_RGB_LED_PWM_RED,
+                    .pwm_green = FWLOADER_RGB_LED_PWM_GREEN,
+                    .pwm_blue  = FWLOADER_RGB_LED_PWM_BLUE,
+                });
+            k_sleep(K_MSEC(FWLOADER_RGB_LED_BLINK_DURATION_MS));
 
             fwloader_rgb_led_set_raw_currents_and_pwms(
                 &rgb_led_currents,
-                &(fwloader_rgb_led_pwms_t) { .pwm_red = 0, .pwm_green = 0, .pwm_blue = 0 });
-            k_sleep(K_MSEC(950));
+                &(fwloader_rgb_led_pwms_t) {
+                    .pwm_red   = FWLOADER_RGB_LED_PWM_MIN,
+                    .pwm_green = FWLOADER_RGB_LED_PWM_MIN,
+                    .pwm_blue  = FWLOADER_RGB_LED_PWM_MIN,
+                });
+            k_sleep(K_MSEC(FWLOADER_RGB_LED_BLINK_INTERVAL_MS - FWLOADER_RGB_LED_BLINK_DURATION_MS));
         }
         else
         {
-            k_sleep(K_MSEC(1000));
+            k_sleep(K_MSEC(FWLOADER_RGB_LED_BLINK_INTERVAL_MS));
         }
 
         STATS_INC(smp_svr_stats, ticks);
     }
     sys_reboot(SYS_REBOOT_COLD);
-
-    return 0;
 }
 
 /**
@@ -285,15 +310,16 @@ __wrap_sys_reboot(int type) // NOSONAR
             if (fwloader_rgb_led_is_lp5810_ready())
             {
                 fwloader_rgb_led_turn_on_animation_blinking_white(&(fwloader_rgb_led_currents_t) {
-                    .current_red   = 115,
-                    .current_green = 36,
-                    .current_blue  = 53,
+                    .current_red   = FWLOADER_RGB_ANIMATION_BLINKING_WHITE_CURRENT_RED,
+                    .current_green = FWLOADER_RGB_ANIMATION_BLINKING_WHITE_CURRENT_GREEN,
+                    .current_blue  = FWLOADER_RGB_ANIMATION_BLINKING_WHITE_CURRENT_BLUE,
                 });
             }
         }
         LOG_WRN("Rebooting...");
-        k_msleep(25); // Give some time to print log message
-                      /* Call the former implementation to actually restart the board */
+        k_msleep(25); // NOSONAR: Give some time to print log message
+
+        /* Call the former implementation to actually restart the board */
 #if CONFIG_DEBUG || !IS_ENABLED(CONFIG_WATCHDOG)
         __real_sys_reboot(SYS_REBOOT_COLD);
 #else
@@ -306,7 +332,7 @@ __wrap_sys_reboot(int type) // NOSONAR
         g_flag_reboot_requested = true;
         while (1)
         {
-            k_msleep(1000);
+            k_msleep(MSEC_PER_SEC);
         }
     }
 }

@@ -10,8 +10,10 @@
 #include <zephyr/bluetooth/conn.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/mgmt/mcumgr/transport/smp_bt.h>
+#include "sys_utils.h"
 #include "fwloader_led.h"
 #include "fwloader_button.h"
+#include "zephyr_api.h"
 
 #define LOG_LEVEL LOG_LEVEL_DBG
 #include <zephyr/logging/log.h>
@@ -23,12 +25,15 @@ static char     g_bt_name[sizeof(CONFIG_BT_DEVICE_NAME) + 5];
 static uint64_t g_ble_mac;
 static bool     g_bt_is_connected;
 
-static const struct bt_data ad[] = {
+#define NUM_RECORDS_IN_ADVS_PACKET     2
+#define NUM_RECORDS_IN_SCAN_RSP_PACKET 1
+
+static const struct bt_data ad[NUM_RECORDS_IN_ADVS_PACKET] = {
     BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
     BT_DATA_BYTES(BT_DATA_UUID128_ALL, SMP_BT_SVC_UUID_VAL),
 };
 
-static const struct bt_data sd[] = {
+static const struct bt_data sd[NUM_RECORDS_IN_SCAN_RSP_PACKET] = {
     BT_DATA(BT_DATA_NAME_COMPLETE, g_bt_name, sizeof(g_bt_name)),
 };
 
@@ -43,9 +48,9 @@ radio_address_get(void)
 
     if (count > 0)
     {
-        for (int i = 0; i < 6; i++)
+        for (uint32_t i = 0; i < BT_ADDR_SIZE; ++i)
         {
-            mac |= (uint64_t)addr[0].a.val[i] << (i * 8);
+            mac |= (uint64_t)addr[0].a.val[i] << (i * BITS_PER_BYTE);
         }
     }
     (void)snprintf(
@@ -53,21 +58,21 @@ radio_address_get(void)
         sizeof(g_bt_name),
         "%s %02X%02X",
         CONFIG_BT_DEVICE_NAME,
-        addr[0].a.val[1],
-        addr[0].a.val[0]);
+        addr[0].a.val[BYTE_IDX_1],
+        addr[0].a.val[BYTE_IDX_0]);
     LOG_INF(
         "BLE MAC: %02x:%02x:%02x:%02x:%02x:%02x",
-        (uint8_t)mac & 0xFF,
-        (uint8_t)((mac >> 8) & 0xFF),
-        (uint8_t)((mac >> 16) & 0xFF),
-        (uint8_t)((mac >> 24) & 0xFF),
-        (uint8_t)((mac >> 32) & 0xFF),
-        (uint8_t)((mac >> 40) & 0xFF));
+        (uint8_t)mac & BYTE_MASK,
+        (uint8_t)((mac >> BYTE_SHIFT_1) & BYTE_MASK),
+        (uint8_t)((mac >> BYTE_SHIFT_2) & BYTE_MASK),
+        (uint8_t)((mac >> BYTE_SHIFT_3) & BYTE_MASK),
+        (uint8_t)((mac >> BYTE_SHIFT_4) & BYTE_MASK),
+        (uint8_t)((mac >> BYTE_SHIFT_5) & BYTE_MASK));
     return mac;
 }
 
 static void
-advertise(struct k_work* work)
+advertise(__unused struct k_work* work)
 {
     bt_le_adv_stop();
 
@@ -77,8 +82,8 @@ advertise(struct k_work* work)
         BT_GAP_ADV_FAST_INT_MAX_2,
         NULL);
 
-    const int rc = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
-    if (rc)
+    const zephyr_api_ret_t rc = bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), sd, ARRAY_SIZE(sd));
+    if (0 != rc)
     {
         LOG_ERR("Advertising failed to start (rc %d)", rc);
         return;
@@ -88,9 +93,9 @@ advertise(struct k_work* work)
 }
 
 static void
-connected(struct bt_conn* conn, uint8_t err)
+connected(__unused struct bt_conn* conn, uint8_t err)
 {
-    if (err)
+    if (0 != err)
     {
         LOG_ERR("Connection failed (err 0x%02x)", err);
     }
@@ -109,7 +114,7 @@ connected(struct bt_conn* conn, uint8_t err)
 }
 
 static void
-disconnected(struct bt_conn* conn, uint8_t reason)
+disconnected(__unused struct bt_conn* conn, uint8_t reason)
 {
     LOG_INF("Disconnected (reason 0x%02x)", reason);
     g_bt_is_connected = false;
@@ -129,10 +134,10 @@ BT_CONN_CB_DEFINE(conn_callbacks) = {
 };
 
 static void
-bt_ready(int err)
+bt_ready(int err /* NOSONAR: Zephyr API */)
 {
     LOG_INF("bt_ready");
-    if (err != 0)
+    if (0 != err)
     {
         LOG_ERR("Bluetooth failed to initialise: %d", err);
     }
@@ -146,12 +151,10 @@ bt_ready(int err)
 void
 start_smp_bluetooth_adverts(void)
 {
-    int rc;
-
     LOG_INF("start_smp_bluetooth_adverts");
 
     k_work_init(&advertise_work, advertise);
-    rc = bt_enable(bt_ready);
+    zephyr_api_ret_t rc = bt_enable(bt_ready);
 
     if (rc != 0)
     {

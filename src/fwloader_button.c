@@ -7,6 +7,7 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include "fwloader_gpio_input.h"
+#include "zephyr_api.h"
 
 LOG_MODULE_DECLARE(fw_loader, LOG_LEVEL_INF);
 
@@ -34,8 +35,8 @@ fwloader_button_int_disable(void)
 {
     const struct gpio_dt_spec* const p_button = &button0;
 
-    const int ret = gpio_pin_interrupt_configure_dt(p_button, GPIO_INT_DISABLE);
-    if (ret != 0)
+    const zephyr_api_ret_t ret = gpio_pin_interrupt_configure_dt(p_button, GPIO_INT_DISABLE);
+    if (0 != ret)
     {
         LOG_ERR("Failed to disable interrupt on %s pin %d, res=%d", p_button->port->name, p_button->pin, ret);
         return;
@@ -68,7 +69,7 @@ fwloader_button_deinit(struct gpio_callback* const p_gpio_callback)
         fwloader_button_remove_cb(p_gpio_callback);
     }
 
-    const int ret = gpio_pin_configure_dt(p_button, GPIO_DISCONNECTED);
+    const int32_t ret = gpio_pin_configure_dt(p_button, GPIO_DISCONNECTED);
     if (0 != ret)
     {
         LOG_ERR("Failed to disconnect GPIO on %s pin %d, res=%d", p_button->port->name, p_button->pin, ret);
@@ -79,7 +80,7 @@ fwloader_button_deinit(struct gpio_callback* const p_gpio_callback)
 bool
 fwloader_button_get(void)
 {
-    int rc = gpio_pin_get_dt(&button0);
+    zephyr_api_ret_t rc = gpio_pin_get_dt(&button0);
     if (rc < 0)
     {
         LOG_ERR("Failed to get BUTTON0 (rc: %d)", rc);

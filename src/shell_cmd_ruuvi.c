@@ -17,13 +17,13 @@ static void
 log_args(size_t argc, char** argv)
 {
     LOG_DBG("%s: argc=%zu", __func__, argc);
-    for (size_t i = 0; i < argc; i++)
+    for (size_t i = 0; i < argc; ++i)
     {
         LOG_DBG("%s: argv[%zu]=%s", __func__, i, argv[i]);
     }
 }
 
-static int
+static int // NOSONAR: Zephyr shell command handler API
 cmd_ruuvi_echo(const struct shell* sh, size_t argc, char** argv)
 {
     log_args(argc, argv);
@@ -37,7 +37,7 @@ cmd_ruuvi_echo(const struct shell* sh, size_t argc, char** argv)
 }
 
 #if defined(CONFIG_BOOTLOADER_MCUBOOT)
-static int
+static int // NOSONAR: Zephyr shell command handler API
 cmd_ruuvi_version_info(const struct shell* sh, size_t argc, char** argv)
 {
     log_args(argc, argv);
@@ -112,7 +112,7 @@ cmd_ruuvi_version_info(const struct shell* sh, size_t argc, char** argv)
 #endif // CONFIG_BOOTLOADER_MCUBOOT
 
 /* Add command to the set of 'ruuvi' subcommands, see `SHELL_SUBCMD_ADD` */
-#define RUUVI_CMD_ARG_ADD(_syntax, _subcmd, _help, _handler, _mand, _opt) \
+#define RUUVI_CMD_ARG_ADD(_syntax, _subcmd, _help, _handler, _mand, _opt) /* NOSONAR */ \
     SHELL_SUBCMD_ADD((ruuvi), _syntax, _subcmd, _help, _handler, _mand, _opt);
 
 RUUVI_CMD_ARG_ADD(echo, NULL, "message", cmd_ruuvi_echo, 2, 0);
