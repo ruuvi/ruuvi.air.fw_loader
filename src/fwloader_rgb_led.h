@@ -12,6 +12,12 @@
 extern "C" {
 #endif
 
+#define FWLOADER_RGB_LED_CURRENT_MIN (0U)
+#define FWLOADER_RGB_LED_CURRENT_MAX (255U)
+
+#define FWLOADER_RGB_LED_PWM_MIN (0U)
+#define FWLOADER_RGB_LED_PWM_MAX (255U)
+
 typedef uint8_t fwloader_rgb_led_current_t; //<! Current value 0..255
 typedef uint8_t fwloader_rgb_led_pwm_t;     //<! PWM value 0..255
 

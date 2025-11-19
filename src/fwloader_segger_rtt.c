@@ -12,6 +12,12 @@
 
 LOG_MODULE_DECLARE(fw_loader, LOG_LEVEL_INF);
 
+#if defined(CONFIG_USE_SEGGER_RTT)
+#define RTT_DATA_SRAM_NODE DT_NODELABEL(rtt_data)
+#define RTT_DATA_SRAM_ADDR DT_REG_ADDR(RTT_DATA_SRAM_NODE)
+#define RTT_DATA_SRAM_SIZE DT_REG_SIZE(RTT_DATA_SRAM_NODE)
+#endif
+
 #define FWLOADER_ASSERT(test, fmt, ...) \
     do \
     { \
@@ -29,9 +35,9 @@ void
 fwloader_segger_rtt_check_data_location_and_size(void)
 {
 #if defined(CONFIG_USE_SEGGER_RTT)
-    extern uint8_t __rtt_buff_data_start[];
-    extern uint8_t __rtt_buff_data_end[];
-    const size_t   rtt_buff_size = (size_t)(__rtt_buff_data_end - __rtt_buff_data_start);
+    extern uint8_t __rtt_buff_data_start[]; // NOSONAR
+    extern uint8_t __rtt_buff_data_end[];   // NOSONAR
+    const size_t   rtt_buff_size = (size_t)((uintptr_t)__rtt_buff_data_end - (uintptr_t)__rtt_buff_data_start);
     LOG_INF("fw_loader: RTT data address: %p", __rtt_buff_data_start);
     LOG_INF("fw_loader: RTT data size: 0x%zx", rtt_buff_size);
     FWLOADER_ASSERT(
@@ -44,10 +50,6 @@ fwloader_segger_rtt_check_data_location_and_size(void)
         ""
         "RTT buffer size is not aligned to 4kB, size=0x%zx",
         rtt_buff_size);
-
-#define RTT_DATA_SRAM_NODE DT_NODELABEL(rtt_data)
-#define RTT_DATA_SRAM_ADDR DT_REG_ADDR(RTT_DATA_SRAM_NODE)
-#define RTT_DATA_SRAM_SIZE DT_REG_SIZE(RTT_DATA_SRAM_NODE)
 
     FWLOADER_ASSERT(
         (uintptr_t)__rtt_buff_data_start == RTT_DATA_SRAM_ADDR,

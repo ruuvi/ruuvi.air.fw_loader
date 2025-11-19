@@ -18,6 +18,8 @@ LOG_MODULE_DECLARE(fw_loader, LOG_LEVEL_INF);
 #define DELAY_AFTER_PREFIX_MS   (500)
 #define DELAY_AFTER_ERR_CODE_MS (1000)
 
+#define DELAY_BEFORE_REBOOT_MS (100)
+
 static bool
 check_if_button_released_and_pressed(bool* p_is_button_released)
 {
@@ -35,7 +37,7 @@ check_if_button_released_and_pressed(bool* p_is_button_released)
         if (fwloader_button_get())
         {
             LOG_INF("fw_loader: Button is pressed - reboot");
-            k_msleep(100);
+            k_msleep(DELAY_BEFORE_REBOOT_MS);
             return true;
         }
     }
@@ -53,7 +55,7 @@ fwloader_led_err_blink(
     {
         fwloader_led_red_on();
 
-        for (uint32_t i = 0; i < delay_between_blinks_ms / SLEEP_INTERVAL_MS; ++i)
+        for (uint32_t j = 0; j < (delay_between_blinks_ms / SLEEP_INTERVAL_MS); ++j)
         {
             k_msleep(SLEEP_INTERVAL_MS);
             if (check_if_button_released_and_pressed(p_is_button_released))
@@ -64,7 +66,7 @@ fwloader_led_err_blink(
 
         fwloader_led_red_off();
 
-        for (uint32_t i = 0; i < delay_after_blinks_ms / SLEEP_INTERVAL_MS; ++i)
+        for (uint32_t j = 0; j < (delay_after_blinks_ms / SLEEP_INTERVAL_MS); ++j)
         {
             k_msleep(SLEEP_INTERVAL_MS);
             if (check_if_button_released_and_pressed(p_is_button_released))
